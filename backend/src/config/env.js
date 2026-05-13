@@ -16,5 +16,9 @@ module.exports = {
   mongoUri: process.env.MONGO_URI,
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "1d",
-  corsOrigin: process.env.CORS_ORIGIN || "http://localhost:5173"
+  corsOrigin: process.env.CORS_ORIGIN || "http://localhost:5173",
+  doctorPassword: process.env.DOCTOR_PASSWORD,
+  receptionPassword: process.env.RECEPTION_PASSWORD,
+  doctorLoginEmail: process.env.DOCTOR_LOGIN_EMAIL || "doctor@clinic.local",
+  receptionLoginEmail: process.env.RECEPTION_LOGIN_EMAIL || "reception@clinic.local"
 };

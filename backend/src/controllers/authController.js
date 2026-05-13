@@ -1,8 +1,51 @@
 const User = require("../models/User");
+const roles = require("../constants/roles");
+const env = require("../config/env");
 const ApiError = require("../utils/ApiError");
 const asyncHandler = require("../utils/asyncHandler");
 const { signToken } = require("../utils/jwt");
 const { getPermissionsByRole, resolveRole } = require("../constants/permissions");
+
+const ROLE_LOGIN_CONFIG = {
+  [roles.ADMIN]: {
+    password: env.doctorPassword,
+    defaultName: "Doctor",
+    defaultEmail: env.doctorLoginEmail
+  },
+  [roles.RECEPTIONIST]: {
+    password: env.receptionPassword,
+    defaultName: "Reception",
+    defaultEmail: env.receptionLoginEmail
+  }
+};
+
+const findUserByRole = async (normalizedRole, rawRole) => {
+  let user = await User.findOne({ role: normalizedRole });
+
+  // Backward compatibility for legacy role names saved before normalization.
+  if (!user && rawRole && rawRole !== normalizedRole) {
+    user = await User.findOne({ role: rawRole });
+  }
+
+  return user;
+};
+
+const createRoleUser = async (normalizedRole, password) => {
+  const roleConfig = ROLE_LOGIN_CONFIG[normalizedRole] || {};
+  let email = roleConfig.defaultEmail || `${normalizedRole}@clinic.local`;
+
+  const existingByEmail = await User.findOne({ email });
+  if (existingByEmail && existingByEmail.role !== normalizedRole) {
+    email = `${normalizedRole}.${Date.now()}@clinic.local`;
+  }
+
+  return User.create({
+    name: roleConfig.defaultName || normalizedRole,
+    email,
+    password,
+    role: normalizedRole
+  });
+};
 
 const register = asyncHandler(async (req, res) => {
   const { name, email, password, role } = req.validated.body;
@@ -40,23 +83,38 @@ const login = asyncHandler(async (req, res) => {
 
   if (normalizedRole) {
     invalidCredentialMessage = "Invalid role or password";
-    user = await User.findOne({ role: normalizedRole });
+    const roleConfig = ROLE_LOGIN_CONFIG[normalizedRole];
 
-    // Backward compatibility for legacy role names saved before normalization.
-    if (!user && role !== normalizedRole) {
-      user = await User.findOne({ role });
+    if (roleConfig?.password) {
+      if (secret !== roleConfig.password) {
+        throw new ApiError(401, invalidCredentialMessage);
+      }
+
+      user = await findUserByRole(normalizedRole, role);
+      if (!user) {
+        user = await createRoleUser(normalizedRole, roleConfig.password);
+      }
+    } else {
+      user = await findUserByRole(normalizedRole, role);
+      if (!user) {
+        throw new ApiError(401, invalidCredentialMessage);
+      }
+
+      const isValid = await user.comparePassword(secret);
+      if (!isValid) {
+        throw new ApiError(401, invalidCredentialMessage);
+      }
     }
   } else {
     user = await User.findOne({ email });
-  }
+    if (!user) {
+      throw new ApiError(401, invalidCredentialMessage);
+    }
 
-  if (!user) {
-    throw new ApiError(401, invalidCredentialMessage);
-  }
-
-  const isValid = await user.comparePassword(secret);
-  if (!isValid) {
-    throw new ApiError(401, invalidCredentialMessage);
+    const isValid = await user.comparePassword(secret);
+    if (!isValid) {
+      throw new ApiError(401, invalidCredentialMessage);
+    }
   }
 
   const effectiveRole = resolveRole(user.role);
