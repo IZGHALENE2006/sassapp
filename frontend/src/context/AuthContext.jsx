@@ -27,8 +27,10 @@ export function AuthProvider({ children }) {
     fetchMe();
   }, [token]);
 
-  const login = async (email, password) => {
-    const { data } = await api.post("/auth/login", { email, password });
+  const login = async ({ role, password, email, code }) => {
+    const payload = role ? { role, password } : { email, password };
+    if (role && code && !password) payload.password = code;
+    const { data } = await api.post("/auth/login", payload);
     localStorage.setItem("clinic_token", data.token);
     setUser(data.user);
     return data.user;

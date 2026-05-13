@@ -31,16 +31,32 @@ const register = asyncHandler(async (req, res) => {
 });
 
 const login = asyncHandler(async (req, res) => {
-  const { email, password } = req.validated.body;
+  const { email, password, role, code } = req.validated.body;
+  const normalizedRole = role ? resolveRole(role) : null;
+  const secret = password || code;
 
-  const user = await User.findOne({ email });
-  if (!user) {
-    throw new ApiError(401, "Invalid email or password");
+  let user;
+  let invalidCredentialMessage = "Invalid email or password";
+
+  if (normalizedRole) {
+    invalidCredentialMessage = "Invalid role or password";
+    user = await User.findOne({ role: normalizedRole });
+
+    // Backward compatibility for legacy role names saved before normalization.
+    if (!user && role !== normalizedRole) {
+      user = await User.findOne({ role });
+    }
+  } else {
+    user = await User.findOne({ email });
   }
 
-  const isValid = await user.comparePassword(password);
+  if (!user) {
+    throw new ApiError(401, invalidCredentialMessage);
+  }
+
+  const isValid = await user.comparePassword(secret);
   if (!isValid) {
-    throw new ApiError(401, "Invalid email or password");
+    throw new ApiError(401, invalidCredentialMessage);
   }
 
   const effectiveRole = resolveRole(user.role);

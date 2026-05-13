@@ -10,10 +10,10 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { login, logout } = useAuth();
+  const { login } = useAuth();
   const { t, language, setLanguage, dir } = useI18n();
   const toast = useToast();
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({ password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -25,33 +25,34 @@ export default function LoginPage() {
   const roleLabel =
     selectedRole === "admin"
       ? language === "ar"
-        ? "المدير"
-        : "Admin"
+        ? "الطبيب"
+        : "Docteur"
       : selectedRole === "receptionist"
         ? language === "ar"
           ? "الاستقبال"
           : "Reception"
         : "";
 
-  const roleMismatchError =
+  const roleRequiredError =
     language === "ar"
-      ? "الحساب لا يطابق الدور المختار. اختر الدور الصحيح."
-      : "Ce compte ne correspond pas au role choisi. Choisissez le bon role.";
+      ? "اختَر الدور قبل تسجيل الدخول."
+      : "Choisissez un role avant de vous connecter.";
 
   const changeRoleLabel = language === "ar" ? "تغيير الدور" : "Changer le role";
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    if (!selectedRole) {
+      setError(roleRequiredError);
+      toast.error(roleRequiredError);
+      return;
+    }
+
     setLoading(true);
     try {
-      const user = await login(form.email, form.password);
-      if (selectedRole && user.role !== selectedRole) {
-        logout();
-        setError(roleMismatchError);
-        toast.error(roleMismatchError);
-        return;
-      }
+      await login({ role: selectedRole, password: form.password });
       toast.success(language === "ar" ? "تم تسجيل الدخول بنجاح." : "Connexion reussie.");
       navigate(from, { replace: true });
     } catch (err) {
@@ -107,18 +108,12 @@ export default function LoginPage() {
     
         <div className="space-y-3">
           <Input
-            label={t("common.email")}
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-            required
-          />
-          <Input
             label={t("common.password")}
             type="password"
             value={form.password}
             onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
             required
+            autoComplete="current-password"
           />
         </div>
 
